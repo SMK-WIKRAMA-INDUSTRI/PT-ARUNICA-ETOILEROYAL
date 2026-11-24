@@ -14,7 +14,7 @@ export default defineConfig({
     { name: 'mobile-chromium', use: { ...devices['Pixel 7'], browserName: 'chromium' } }
   ],
   webServer: {
-    command: 'npm.cmd run dev -- --host 127.0.0.1 --port 4173 --strictPort',
+    command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
     env: { ...process.env, VITE_CONCIERGE_PROXY_URL: '' },
