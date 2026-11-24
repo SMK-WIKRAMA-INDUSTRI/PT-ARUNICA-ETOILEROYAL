@@ -1,0 +1,30 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({
+  args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream']
+});
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await page.route('https://images.unsplash.com/**', (r) => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>' }));
+await page.goto('http://localhost:5173/Ai-Chatbot-Restaurant/', { waitUntil: 'domcontentloaded' });
+await page.getByRole('button', { name: /English/ }).click();
+await page.getByRole('button', { name: /US Dollar/ }).click();
+await page.getByRole('button', { name: /Ask the Sommelier/ }).click();
+await page.waitForTimeout(500);
+await page.getByRole('button', { name: 'Telepon' }).click();
+await page.waitForTimeout(9000);
+console.log('status after greeting:', await page.locator('.call-bar strong').textContent());
+await page.getByRole('button', { name: 'Test jawaban' }).click();
+await page.waitForTimeout(15000);
+console.log('status after answer:', await page.locator('.call-bar strong').textContent());
+const callErr = await page.locator('.call-bar .chat-error').textContent().catch(() => '(none)');
+console.log('callError:', callErr);
+const msgs = await page.locator('.msg').allTextContents();
+console.log('msg count:', msgs.length);
+console.log('last msg:', (msgs[msgs.length - 1] || '').slice(0, 300));
+console.log('errors:', errors);
+await page.getByRole('button', { name: 'Akhiri panggilan' }).click().catch(() => {});
+await page.waitForTimeout(500);
+await browser.close();
