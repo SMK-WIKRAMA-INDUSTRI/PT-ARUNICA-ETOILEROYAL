@@ -567,16 +567,17 @@ export default function Concierge({ open, onClose, lang, onLang, currency, messa
         />
         <button
           type="button"
-          className="btn btn-quiet"
+          className="btn btn-quiet btn-sm mic-btn"
+          style={{ padding: '0.45rem', minWidth: 'unset' }}
           onClick={handleMic}
           disabled={voiceStatus === 'connecting' || voiceStatus === 'transcribing' || typing}
           aria-label={voiceStatus === 'recording' ? 'Stop recording' : 'Record voice'}
           title={voiceStatus === 'recording' ? 'Stop' : 'Mic'}
         >
-          {voiceStatus === 'recording' ? (
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+         {voiceStatus === 'recording' ? (
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="26" height="26" style={{ width: 26, height: 26 }} fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
           ) : (
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V22M8 22h8" /></svg>
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="26" height="26" style={{ width: 26, height: 26 }} fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="9" y="2.5" width="6" height="12" rx="3" /><path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V22M8 22h8" /></svg>
           )}
         </button>
         <button type="submit" className="btn btn-primary" disabled={typing || !draft.trim() || voiceStatus === 'recording'}>
@@ -584,6 +585,7 @@ export default function Concierge({ open, onClose, lang, onLang, currency, messa
         </button>
       </form>
       )}
+
       {(voiceStatus !== 'idle' || voiceError) && (
         <p className="chat-status" role="status" aria-live="polite">
           {voiceError || (voiceStatus === 'connecting' ? (t('voiceConnecting') || 'Menyambungkan ke Deepgram…')

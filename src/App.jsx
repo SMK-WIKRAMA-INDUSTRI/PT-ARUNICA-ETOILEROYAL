@@ -5,6 +5,8 @@ import {
 } from './data.js';
 import { getServiceStatus } from './hours.js';
 import { askConcierge, groundedReply, isLive } from './concierge.js';
+import { ensureChatSession, loadChatMessages, saveChatMessage } from './lib/chatStore.js';
+import { isSupabaseConfigured } from './lib/supabase.js';
 import { imageFor } from './foodImages.js';
 import { useTheme } from './hooks.js';
 import { CURRENCY_OPTIONS, LANGUAGES, useI18n } from './i18n.jsx';
@@ -47,6 +49,7 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: 'assistant', content: t('greeting'), recommendedIds: ['wagyu-ribeye', 'the-royal-experience'] }]);
   const [typing, setTyping] = useState(false);
+  const sessionIdRef = useRef(null);
   const [chatError, setChatError] = useState('');
   const [provider, setProvider] = useState(isLive ? 'live' : 'grounded');
 
@@ -91,6 +94,26 @@ export default function App() {
     )));
   }, [t]);
 
+  // Restore chat session from Supabase on first mount.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sid = await ensureChatSession(lang, currency);
+        if (cancelled || !sid) return;
+        sessionIdRef.current = sid;
+        const loaded = await loadChatMessages(sid);
+        if (cancelled) return;
+        if (loaded && loaded.length) setMessages(loaded);
+      } catch (e) {
+        console.error('Failed to restore chat session', e);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') setNavOpen(false);
@@ -127,9 +150,12 @@ export default function App() {
       setTyping(true);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 20000);
+      const sid = sessionIdRef.current;
+      if (sid) saveChatMessage(sid, { role: 'user', content: clean, lang, currency });
       const push = (r) => {
         setProvider(r.provider);
         setMessages((prev) => [...prev, { role: 'assistant', content: r.text, recommendedIds: r.recommendedIds }]);
+        if (sid) saveChatMessage(sid, { role: 'assistant', content: r.text, recommendedIds: r.recommendedIds, provider: r.provider, lang, currency });
       };
       try {
         push(await askConcierge({ messages: next, lang, currency, signal: controller.signal }));
@@ -139,7 +165,8 @@ export default function App() {
           ? (err.name === 'AbortError' ? t('aiTooLong') : t('serviceUnavailable'))
           : raw;
         setChatError(message);
-        push(groundedReply(clean, lang, currency));
+        const gr = groundedReply(clean, lang, currency);
+        push(gr);
       } finally {
         clearTimeout(timeout);
         setTyping(false);
@@ -459,7 +486,11 @@ export default function App() {
         error={chatError}
         providerLabel={providerLabel}
         onSend={sendPrompt}
-        onAppendMessage={(role, content) => setMessages((prev) => [...prev, { role, content }])}
+        onAppendMessage={(role, content) => {
+          setMessages((prev) => [...prev, { role, content }]);
+          const sid = sessionIdRef.current;
+          if (sid) saveChatMessage(sid, { role, content, lang, currency });
+        }}
         onPickDish={setModalDish}
         onAddDish={reserveWith}
       />
