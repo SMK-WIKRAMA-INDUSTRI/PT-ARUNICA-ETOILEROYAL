@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { localizeHours, localizeMenu, localizeRestaurant, MENU_DATA } from './src/data.js';
+import { localizeHours, localizeMenu, localizeRestaurant, MENU_DATA, RESTAURANT } from './src/data.js';
 import { convertFromEur, formatPrice } from './src/currency.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +54,94 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const paymentEnabled = Boolean(MIDTRANS_SERVER_KEY && MIDTRANS_CLIENT_KEY);
 const midtransAuth = () => `Basic ${Buffer.from(`${MIDTRANS_SERVER_KEY}:`).toString('base64')}`;
 
+// The browser reads the editable catalogue from Supabase; the server must use
+// the same rows when building the concierge prompt and when verifying payment
+// amounts. Falls back to the built-in data.js menu when Supabase is absent.
+const CATALOG_TTL_MS = 30_000;
+const DEFAULT_CATALOG = { profile: RESTAURANT, categories: null, products: MENU_DATA };
+let catalogCache = { at: 0, data: DEFAULT_CATALOG };
+
+const text = (value) => value == null ? '' : String(value);
+const list = (value) => Array.isArray(value) ? value.filter(Boolean) : [];
+const bool = (value) => value === true || value === 'true' || value === 1;
+
+function normalizeServerRow(row) {
+  return {
+    id: text(row.id),
+    category: row.category_id || row.category,
+    name: text(row.name || row.id),
+    price: Number(row.price) || 0,
+    dishType: text(row.dish_type || row.dishType),
+    weight: text(row.weight),
+    recommendedTemp: text(row.recommended_temp || row.recommendedTemp),
+    provenance: text(row.provenance),
+    provenanceId: text(row.provenance_id || row.provenanceId),
+    description: text(row.description),
+    descriptionId: text(row.description_id || row.descriptionId),
+    ingredients: list(row.ingredients),
+    ingredientsId: list(row.ingredients_id || row.ingredientsId),
+    flavorProfile: text(row.flavor_profile || row.flavorProfile),
+    flavorProfileId: text(row.flavor_profile_id || row.flavorProfileId),
+    pairing: text(row.pairing),
+    pairingId: text(row.pairing_id || row.pairingId),
+    allergens: text(row.allergens),
+    allergensId: text(row.allergens_id || row.allergensId),
+    chefRecommended: bool(row.chef_recommended || row.chefRecommended),
+    glutenFree: bool(row.gluten_free || row.glutenFree)
+  };
+}
+
+function normalizeServerProfile(row) {
+  return {
+    ...RESTAURANT,
+    ...row,
+    tagline: text(row.tagline || RESTAURANT.tagline),
+    taglineId: text(row.tagline_id || row.taglineId || RESTAURANT.taglineId),
+    dressCode: text(row.dress_code || row.dressCode || RESTAURANT.dressCode),
+    dressCodeId: text(row.dress_code_id || row.dressCodeId || RESTAURANT.dressCodeId)
+  };
+}
+
+async function supabaseSelect(table, query) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      Accept: 'application/json'
+    }
+  });
+  if (!response.ok) throw new Error(`${table}: ${response.status}`);
+  return response.json();
+}
+
+async function refreshCatalog() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return DEFAULT_CATALOG;
+  if (Date.now() - catalogCache.at < CATALOG_TTL_MS) return catalogCache.data;
+  try {
+    const [profileRows, categoryRows, productRows] = await Promise.all([
+      supabaseSelect('restaurant_profile', 'id=eq.main&select=*'),
+      supabaseSelect('categories', 'active=eq.true&select=*&order=sort_order.asc'),
+      supabaseSelect('products', 'active=eq.true&select=*&order=sort_order.asc')
+    ]);
+    catalogCache = {
+      at: Date.now(),
+      data: {
+        profile: profileRows[0] ? normalizeServerProfile(profileRows[0]) : RESTAURANT,
+        categories: Array.isArray(categoryRows) && categoryRows.length
+          ? categoryRows.map((row) => ({ id: row.id, name: text(row.name), nameId: text(row.name_id || row.nameId) }))
+          : null,
+        products: Array.isArray(productRows) && productRows.length
+          ? productRows.map(normalizeServerRow)
+          : MENU_DATA
+      }
+    };
+  } catch (error) {
+    console.error('[catalog] using built-in menu:', error.message);
+    catalogCache = { at: Date.now(), data: DEFAULT_CATALOG };
+  }
+  return catalogCache.data;
+}
+
 function send(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
@@ -88,14 +176,14 @@ function readBody(req) {
   });
 }
 
-function buildSystemPrompt(lang, currency) {
+function buildSystemPrompt(lang, currency, catalog = DEFAULT_CATALOG) {
   const id = lang === 'ID';
-  const menu = localizeMenu(lang, currency).map((dish) => (
+  const menu = localizeMenu(lang, currency, catalog.products, catalog.categories).map((dish) => (
     `${dish.id}: ${dish.name}, ${formatPrice(dish.price, currency)}, ${dish.weight}; ${dish.flavorProfile}; ${dish.recommendedTemp}; pairing: ${dish.pairing}; allergens: ${dish.allergens}.`
   )).join('\n');
   const hours = localizeHours(lang).map(([day, time]) => `${day}: ${time}`).join('; ');
-  const restaurant = localizeRestaurant(lang);
-  const example = formatPrice(95, currency);
+  const restaurant = localizeRestaurant(lang, catalog.profile);
+  const example = formatPrice(catalog.products[0]?.price || 95, currency);
 
   return [
     id
@@ -141,6 +229,8 @@ async function handleConcierge(req, res) {
     return;
   }
 
+  const catalog = await refreshCatalog();
+
   const upstream = await fetch(COMPLETIONS_URL, {
     method: 'POST',
     headers: {
@@ -154,7 +244,7 @@ async function handleConcierge(req, res) {
       max_tokens: 900,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: buildSystemPrompt(lang, currency) },
+        { role: 'system', content: buildSystemPrompt(lang, currency, catalog) },
         ...usable
       ]
     })
@@ -184,7 +274,7 @@ async function handleConcierge(req, res) {
     return;
   }
 
-  const validIds = new Set(localizeMenu().map((dish) => dish.id));
+  const validIds = new Set(catalog.products.map((dish) => dish.id));
   let text = content.trim();
   let recommendedIds = [];
   try {
@@ -206,11 +296,11 @@ function validOrderRef(value) {
   return /^[A-Za-z0-9-]{6,64}$/.test(ref) ? ref : null;
 }
 
-function pricedItems(input) {
+function pricedItems(input, products = MENU_DATA) {
   if (!Array.isArray(input) || !input.length || input.length > 20) {
     throw new Error('Choose between 1 and 20 menu items.');
   }
-  const menu = new Map(MENU_DATA.map((dish) => [dish.id, dish]));
+  const menu = new Map(products.map((dish) => [dish.id, dish]));
   return input.map((entry) => {
     const dish = menu.get(entry?.id);
     const qty = Number(entry?.qty);
@@ -270,7 +360,8 @@ async function handlePaymentToken(req, res) {
     return;
   }
 
-  const items = pricedItems(body?.items);
+  const catalog = await refreshCatalog();
+  const items = pricedItems(body?.items, catalog.products);
   const grossAmount = items.reduce((sum, item) => sum + item.price * item.qty, 0);
   if (body?.amountIdr != null && Number(body.amountIdr) !== grossAmount) {
     send(res, 400, { error: 'The order amount did not match the menu. Please try again.' });

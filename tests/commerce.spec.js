@@ -84,7 +84,28 @@ test('booking requires a member login while ordering stays open to guests', asyn
   await expect(page.getByRole('status')).toContainText('Your booking request was saved.');
 });
 
-test('a demo admin sees orders and booking requests in the admin panel', async ({ page }) => {
+async function openAdmin(page) {
+  const adminButton = page.getByRole('button', { name: 'ADMIN', exact: true });
+  if (await adminButton.isVisible().catch(() => false)) {
+    await adminButton.click();
+  } else {
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('button', { name: /ADMIN/ }).click();
+  }
+  await expect(page).toHaveURL(/\/admin(?:\?|$)/);
+  await expect(page.locator('.admin-shell')).toBeVisible();
+}
+
+async function clickAdminNav(page, label) {
+  const toggle = page.locator('.admin-menu-toggle');
+  if (await toggle.isVisible().catch(() => false)
+    && (await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click();
+  }
+  await page.locator('.admin-nav').getByRole('button', { name: label }).click();
+}
+
+test('a demo admin sees orders and booking requests on the dashboard', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('etoile.orders', JSON.stringify([{
       orderRef: 'ER-DEMO-0042',
@@ -117,17 +138,40 @@ test('a demo admin sees orders and booking requests in the admin panel', async (
   await useEnglishDollars(page);
 
   await signInDemo(page, 'admin');
-  const adminButton = page.getByRole('button', { name: 'ADMIN', exact: true });
-  if (await adminButton.isVisible().catch(() => false)) {
-    await adminButton.click();
-  } else {
-    await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    await page.getByRole('button', { name: /ADMIN/ }).click();
-  }
+  await openAdmin(page);
 
-  await expect(page.getByRole('dialog', { name: 'Orders & bookings' })).toBeVisible();
-  await expect(page.locator('.admin-list')).toContainText('ER-DEMO-0042');
-  await page.getByRole('tab', { name: 'Bookings' }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  await expect(page.locator('.admin-list').first()).toContainText('ER-DEMO-0042');
+  await clickAdminNav(page, 'Bookings');
   await expect(page.locator('.admin-list')).toContainText('Rafi Test');
   await expect(page.locator('.admin-list')).toContainText('2026-12-01');
+});
+
+test('a demo admin can manage categories, products and the restaurant profile', async ({ page }) => {
+  await signInDemo(page, 'admin');
+  await openAdmin(page);
+
+  await clickAdminNav(page, 'Categories');
+  await page.locator('.admin-split').getByLabel('Category ID').fill('test-pairings');
+  await page.locator('.admin-split').getByLabel('Name (EN)').fill('Test Pairings');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.locator('.admin-table')).toContainText('Test Pairings');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('.admin-table-row').filter({ hasText: 'Test Pairings' }).getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('.admin-table')).not.toContainText('Test Pairings');
+
+  await clickAdminNav(page, 'Products');
+  await page.locator('input').first().fill('Smoked Duck测试');
+  await page.locator('.admin-form select').selectOption({ label: 'Signature Steaks' });
+  await page.locator('input[type="number"]').first().fill('88');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.locator('.admin-table')).toContainText('Smoked Duck测试');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('.admin-table-row').filter({ hasText: 'Smoked Duck测试' }).getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('.admin-table')).not.toContainText('Smoked Duck测试');
+
+  await clickAdminNav(page, 'Restaurant profile');
+  await page.getByLabel('Restaurant name').fill('ÉTOILE TEST');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.locator('.admin-brand')).toContainText('ÉTOILE TEST');
 });

@@ -31,13 +31,14 @@ const STILL_CHECKING_DELAY_MS = 6000;
 const DEEPGRAM_SPEAK_URL = 'https://api.deepgram.com/v2/speak?model=flux-fitri-id&encoding=mp3';
 const MAX_CALL_SECONDS = 300;
 import { LANGUAGES, useI18n } from './i18n.jsx';
-import { localizeDish, MENU_DATA } from './data.js';
 import { askConcierge } from './concierge.js';
-import { imageFor } from './foodImages.js';
+import { imageFallbackUrl, imageFor } from './foodImages.js';
+import { useCatalog } from './lib/catalog.jsx';
 import { useDialog } from './hooks.js';
 
 export default function Concierge({ open, onClose, lang, onLang, currency, messages, typing, error, providerLabel, onSend, onAppendMessage, onPickDish, onAddDish }) {
   const { t, fmt } = useI18n();
+  const { products, localizeDish } = useCatalog();
   const panelRef = useRef(null);
   const inputRef = useRef(null);
   const endRef = useRef(null);
@@ -510,11 +511,15 @@ export default function Concierge({ open, onClose, lang, onLang, currency, messa
             {m.role === 'assistant' && m.recommendedIds?.length > 0 && (
               <div className="recommendation-grid">
                 {m.recommendedIds.slice(0, 3).map((id, recommendationIndex) => {
-                  const dish = localizeDish(MENU_DATA.find((d) => d.id === id), lang, currency);
+                  const dish = localizeDish(products.find((d) => d.id === id), lang, currency);
                   return dish?.name ? (
                     <article key={id} className="recommendation-card">
                       <div className="recommendation-image">
-                        <img src={imageFor(dish, recommendationIndex)} alt="" loading="lazy" />
+                        <img
+                          src={imageFor(dish, recommendationIndex)}
+                          alt="" width="420" height="280" loading="lazy"
+                          onError={(event) => { event.currentTarget.src = imageFallbackUrl(); }}
+                        />
                         <span>{t('chefTable')} · 0{recommendationIndex + 1}</span>
                       </div>
                       <div className="recommendation-copy">

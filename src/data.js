@@ -251,16 +251,30 @@ const pick = (dish, field, lang, currency) => {
   return value;
 };
 
+function categoryLabel(dish, lang, categories) {
+  if (Array.isArray(categories)) {
+    const entry = categories.find((item) => (item?.id ?? item?.name ?? item) === dish.category);
+    if (entry && typeof entry !== 'string') {
+      return lang === 'ID' ? (entry.nameId || entry.name || dish.category) : (entry.name || dish.category);
+    }
+    return entry || dish.category;
+  }
+  const index = CATEGORIES.indexOf(dish.category);
+  return lang === 'ID' ? (CATEGORIES_ID[index] || dish.category) : dish.category;
+}
+
 // Returns a dish with every guest-facing field in the chosen language and
 // currency. Names stay untouched because they are proper menu names.
-export function localizeDish(dish, lang = 'EN', currency = 'IDR') {
+// `categories` is optional so server.mjs and the Admin dashboard can use the
+// same renderer with rows loaded from Supabase.
+export function localizeDish(dish, lang = 'EN', currency = 'IDR', categories = null) {
   if (!dish) return dish;
+  const ingredients = Array.isArray(dish.ingredients) ? dish.ingredients : [];
+  const ingredientsId = Array.isArray(dish.ingredientsId) ? dish.ingredientsId : ingredients;
   return {
     ...dish,
     categoryKey: dish.category,
-    category: lang === 'ID'
-      ? (CATEGORIES_ID[CATEGORIES.indexOf(dish.category)] || dish.category)
-      : dish.category,
+    category: categoryLabel(dish, lang, categories),
     description: pick(dish, 'description', lang, currency),
     provenance: pick(dish, 'provenance', lang, currency),
     flavorProfile: pick(dish, 'flavorProfile', lang, currency),
@@ -268,20 +282,30 @@ export function localizeDish(dish, lang = 'EN', currency = 'IDR') {
     allergens: pick(dish, 'allergens', lang, currency),
     weight: pick(dish, 'weight', lang, currency),
     recommendedTemp: pick(dish, 'recommendedTemp', lang, currency),
-    ingredients: lang === 'ID' && dish.ingredientsId ? dish.ingredientsId : dish.ingredients
+    ingredients: lang === 'ID' ? ingredientsId : ingredients
   };
 }
 
-export function localizeMenu(lang = 'EN', currency = 'IDR') {
-  return MENU_DATA.map((dish) => localizeDish(dish, lang, currency));
+export function localizeMenu(lang = 'EN', currency = 'IDR', products = MENU_DATA, categories = null) {
+  return products.map((dish) => localizeDish(dish, lang, currency, categories));
 }
 
-export function localizeCategories(lang = 'EN') {
-  return lang === 'ID' ? CATEGORIES_ID : CATEGORIES;
+export function localizeCategories(lang = 'EN', categories = null) {
+  const rows = categories || CATEGORIES;
+  return rows.map((item) => {
+    if (typeof item === 'string') return item;
+    return lang === 'ID' ? (item.nameId || item.name) : item.name;
+  });
 }
 
-export function localizeHours(lang = 'EN') {
-  return lang === 'ID' ? HOURS_ID : HOURS;
+export function localizeHours(lang = 'EN', hours = null) {
+  const rows = hours || (lang === 'ID' ? HOURS_ID : HOURS);
+  return rows.map((row) => (
+    Array.isArray(row) ? row : [
+      lang === 'ID' ? (row.id || row.day) : row.day,
+      lang === 'ID' ? (row.timeId || row.time) : row.time
+    ]
+  ));
 }
 
 export function localizeFaq(lang = 'EN') {
@@ -291,10 +315,11 @@ export function localizeFaq(lang = 'EN') {
   }));
 }
 
-export function localizeRestaurant(lang = 'EN') {
+export function localizeRestaurant(lang = 'EN', profile = RESTAURANT) {
   return {
     ...RESTAURANT,
-    tagline: lang === 'ID' ? RESTAURANT.taglineId : RESTAURANT.tagline,
-    dressCode: lang === 'ID' ? RESTAURANT.dressCodeId : RESTAURANT.dressCode
+    ...profile,
+    tagline: lang === 'ID' ? (profile.taglineId || profile.tagline) : profile.tagline,
+    dressCode: lang === 'ID' ? (profile.dressCodeId || profile.dressCode) : profile.dressCode
   };
 }

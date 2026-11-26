@@ -28,7 +28,13 @@ test.beforeEach(async ({ page }) => {
   consoleErrorsByPage.set(page, consoleErrors);
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    // The demo Supabase project does not necessarily have the optional content
+    // tables seeded yet; the app falls back to its built-in catalogue.
+    const location = message.location();
+    if (/Failed to load resource.*404/.test(message.text())
+      && /\/rest\/v1\/(restaurant_profile|categories|products)/.test(location?.url || '')) return;
+    consoleErrors.push(message.text());
   });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('https://images.unsplash.com/**', (route) => route.fulfill({

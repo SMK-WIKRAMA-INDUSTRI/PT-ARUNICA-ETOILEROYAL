@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
-import { MENU_DATA, RESTAURANT, localizeDish } from './data.js';
 import { useI18n } from './i18n.jsx';
+import { useCatalog } from './lib/catalog.jsx';
 import { pushBookingToSupabase, saveLocalBooking } from './lib/orders.js';
 
 const SALON = 'Salon Privé Royal';
@@ -30,6 +30,7 @@ function timesFor(date) {
 
 export default function Reservation({ form, setForm, lang, currency, user, onRequireLogin }) {
   const { t, fmt, isId } = useI18n();
+  const { products, localizeDish, localizeRestaurant } = useCatalog();
   const [error, setError] = useState('');
   const [prepared, setPrepared] = useState(false);
   const [period, setPeriod] = useState('dinner');
@@ -37,7 +38,8 @@ export default function Reservation({ form, setForm, lang, currency, user, onReq
   const times = useMemo(() => timesFor(form.date), [form.date]);
   const closed = form.date && times.length === 0;
   const availableTimes = times.filter((time) => period === 'lunch' ? time < '16:00' : time >= '16:00');
-  const dish = localizeDish(MENU_DATA.find((m) => m.id === form.dishId) || MENU_DATA[0], lang, currency);
+  const restaurant = localizeRestaurant(lang);
+  const dish = localizeDish(products.find((m) => m.id === form.dishId) || products[0], lang, currency);
 
   useEffect(() => {
     if (period === 'lunch' && form.date && new Date(`${form.date}T12:00:00`).getDay() !== 6) {
@@ -118,7 +120,7 @@ export default function Reservation({ form, setForm, lang, currency, user, onReq
       `${t('dishOfInterest')}: ${dish.name} (${fmt(dish.price)})`,
       `${t('notes')}: ${form.notes || t('none')}`
     ].join('\n');
-    window.location.href = `mailto:${RESTAURANT.email}?subject=${encodeURIComponent(t('reservationRequest'))}&body=${encodeURIComponent(body)}`;
+    window.location.href = `mailto:${restaurant.email}?subject=${encodeURIComponent(t('reservationRequest'))}&body=${encodeURIComponent(body)}`;
     setPrepared(true);
   };
 
@@ -210,7 +212,7 @@ export default function Reservation({ form, setForm, lang, currency, user, onReq
         <div className="field">
           <label htmlFor="r-dish">{t('dishOfInterest')}</label>
           <select id="r-dish" value={form.dishId} onChange={set('dishId')}>
-            {MENU_DATA.map((d) => (
+            {products.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}, {fmt(d.price)}
               </option>
@@ -240,7 +242,7 @@ export default function Reservation({ form, setForm, lang, currency, user, onReq
         {prepared && (
           <p className="notice" role="status">
             {t('bookingSaved')} {t('preparedNoteA')}{' '}
-            <a href={`mailto:${RESTAURANT.email}`}>{RESTAURANT.email}</a> {t('preparedNoteB')} {RESTAURANT.phone}.
+            <a href={`mailto:${restaurant.email}`}>{restaurant.email}</a> {t('preparedNoteB')} {restaurant.phone}.
           </p>
         )}
       </aside>

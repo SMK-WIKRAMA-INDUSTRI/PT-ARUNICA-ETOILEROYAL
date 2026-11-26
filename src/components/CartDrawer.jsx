@@ -1,13 +1,14 @@
 import { useRef } from 'react';
-import { localizeDish } from '../data.js';
-import { imageFor } from '../foodImages.js';
+import { imageFallbackUrl, imageFor } from '../foodImages.js';
 import { useI18n } from '../i18n.jsx';
 import { useCart } from '../lib/cart.jsx';
+import { useCatalog } from '../lib/catalog.jsx';
 import { useDialog } from '../hooks.js';
 
 export default function CartDrawer({ open, onClose, onCheckout }) {
   const { t, fmt, lang, currency } = useI18n();
   const { lines, count, subtotalEur, setQuantity, removeItem, clear } = useCart();
+  const { localizeDish } = useCatalog();
   const ref = useRef(null);
   useDialog({ open, onClose, containerRef: ref, trap: true });
   if (!open) return null;
@@ -40,7 +41,11 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
                 const dish = localizeDish(line.dish, lang, currency);
                 return (
                   <article className="cart-line" key={line.id}>
-                    <img src={imageFor(line.dish, index)} alt="" loading="lazy" />
+                    <img
+                      src={imageFor(line.dish, index)}
+                      alt="" width="72" height="72" loading="lazy"
+                      onError={(event) => { event.currentTarget.src = imageFallbackUrl(); }}
+                    />
                     <div className="cart-line-body">
                       <div className="cart-line-title">
                         <h3>{dish.name}</h3>

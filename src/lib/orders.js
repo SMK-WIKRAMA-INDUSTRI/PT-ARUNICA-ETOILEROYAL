@@ -25,21 +25,22 @@ export function makeOrderRef(date = new Date()) {
   return `ER-${stamp}-${suffix}`;
 }
 
-export function priceItems(lines) {
+export function priceItems(lines, products = MENU_DATA) {
+  const menu = Array.isArray(products) ? products : MENU_DATA;
   return lines.map((line) => {
-    const dish = MENU_DATA.find((entry) => entry.id === line.id);
+    const dish = menu.find((entry) => entry.id === line.id);
     return {
       id: line.id,
       name: dish?.name || line.id,
       qty: line.qty,
-      unitPriceEur: dish?.price || 0,
-      unitPriceIdr: convertFromEur(dish?.price || 0, 'IDR')
+      unitPriceEur: Number(dish?.price) || 0,
+      unitPriceIdr: convertFromEur(Number(dish?.price) || 0, 'IDR')
     };
   });
 }
 
-export function buildOrder({ customer, lines, displayCurrency, user, note = '' }) {
-  const items = priceItems(lines);
+export function buildOrder({ customer, lines, displayCurrency, user, note = '', products = MENU_DATA }) {
+  const items = priceItems(lines, products);
   return {
     orderRef: makeOrderRef(),
     customerName: customer.name.trim(),

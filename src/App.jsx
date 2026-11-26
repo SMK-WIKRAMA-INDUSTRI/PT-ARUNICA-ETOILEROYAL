@@ -1,18 +1,16 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  CATEGORIES, MENU_DATA, localizeCategories, localizeFaq, localizeHours, localizeMenu,
-  localizeRestaurant
-} from './data.js';
+import { localizeFaq, localizeHours } from './data.js';
 import { getServiceStatus } from './hours.js';
 import { askConcierge, groundedReply, isLive } from './concierge.js';
 import { ensureChatSession, loadChatMessages, saveChatMessage } from './lib/chatStore.js';
 import { isSupabaseConfigured } from './lib/supabase.js';
 import { useAuth } from './lib/auth.jsx';
 import { useCart } from './lib/cart.jsx';
-import { imageFor } from './foodImages.js';
+import { useCatalog } from './lib/catalog.jsx';
+import { navigate } from './lib/router.js';
+import { imageFallbackUrl, imageFor } from './foodImages.js';
 import { useTheme } from './hooks.js';
 import { CURRENCY_OPTIONS, LANGUAGES, useI18n } from './i18n.jsx';
-import AdminPanel from './components/AdminPanel.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import CartDrawer from './components/CartDrawer.jsx';
 import Checkout from './components/Checkout.jsx';
@@ -26,6 +24,7 @@ export default function App() {
   const { lang, setLang, currency, setCurrency, t, fmt } = useI18n();
   const { user, isAdmin, ready: authReady, signOut } = useAuth();
   const { count: cartCount, addItem, isOpen: cartOpen, openCart, closeCart } = useCart();
+  const { activeProducts, localizeDish, localizeMenu, localizeRestaurant, categoryOptions: getCategoryOptions } = useCatalog();
 
   const scrollToApp = () => {
     document.getElementById('restaurant-app')?.scrollIntoView({ behavior: 'smooth' });
@@ -48,31 +47,36 @@ export default function App() {
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '', date: '', time: '19:30',
-    guests: '2 Guests', seating: 'Le Grand Salon', dishId: 'wagyu-ribeye', notes: ''
+    guests: '2 Guests', seating: 'Le Grand Salon', dishId: '', notes: ''
   });
 
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
   const [authModal, setAuthModal] = useState({ open: false, reason: '' });
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
 
+  const initialRecommendations = useMemo(() => {
+    const picks = activeProducts.filter((dish) => dish.chefRecommended).slice(0, 2).map((dish) => dish.id);
+    return picks.length ? picks : activeProducts.slice(0, 2).map((dish) => dish.id);
+  }, [activeProducts]);
   const [chatOpen, setChatOpen] = useState(false);
-  const [messages, setMessages] = useState([{ role: 'assistant', content: t('greeting'), recommendedIds: ['wagyu-ribeye', 'the-royal-experience'] }]);
+  const [messages, setMessages] = useState([{
+    role: 'assistant', content: t('greeting'), recommendedIds: initialRecommendations
+  }]);
   const [typing, setTyping] = useState(false);
   const sessionIdRef = useRef(null);
   const [chatError, setChatError] = useState('');
   const [provider, setProvider] = useState(isLive ? 'live' : 'grounded');
 
-  const restaurant = useMemo(() => localizeRestaurant(lang), [lang]);
+  const restaurant = useMemo(() => localizeRestaurant(lang), [lang, localizeRestaurant]);
   const hours = useMemo(() => localizeHours(lang), [lang]);
   const faq = useMemo(() => localizeFaq(lang), [lang]);
-  const categories = useMemo(() => localizeCategories(lang), [lang]);
+  const categories = useMemo(() => getCategoryOptions(lang), [getCategoryOptions, lang]);
   const categoryOptions = useMemo(() => [
     { value: 'All', label: t('all') },
-    ...CATEGORIES.map((value, i) => ({ value, label: categories[i] }))
+    ...categories
   ], [categories, t]);
-  const menu = useMemo(() => localizeMenu(lang, currency), [lang, currency]);
+  const menu = useMemo(() => localizeMenu(lang, currency), [lang, currency, localizeMenu]);
   const spotlightDishes = useMemo(() => menu.filter((d) => d.chefRecommended), [menu]);
 
   const NAV = useMemo(() => [
@@ -82,6 +86,16 @@ export default function App() {
     { id: 'visit', label: t('navVisit') },
     { id: 'reservations', label: t('navReservations') }
   ], [t]);
+
+  useEffect(() => {
+    if (!form.dishId && activeProducts.length) {
+      setForm((current) => ({ ...current, dishId: activeProducts[0].id }));
+    }
+  }, [activeProducts, form.dishId]);
+
+  useEffect(() => {
+    if (spotlightIdx >= spotlightDishes.length) setSpotlightIdx(0);
+  }, [spotlightDishes.length, spotlightIdx]);
 
   useEffect(() => {
     setStatus(getServiceStatus(new Date(), lang));
@@ -271,7 +285,7 @@ export default function App() {
 
   return (
     <>
-      <LandingPage onEnter={scrollToApp} />
+      <LandingPage onEnter={scrollToApp} restaurant={restaurant} menu={menu} />
 
       <div id="restaurant-app">
         <a href="#table" className="skip-link">{t('skipToContent')}</a>
@@ -314,7 +328,7 @@ export default function App() {
                     <span>{isAdmin ? t('roleAdmin') : t('roleMember')}</span>
                   </span>
                   {isAdmin && (
-                    <button type="button" className="btn btn-quiet btn-sm hide-sm admin-link" onClick={() => setAdminOpen(true)}>{t('adminBadge')}</button>
+                    <button type="button" className="btn btn-quiet btn-sm hide-sm admin-link" onClick={() => navigate('admin')}>{t('adminBadge')}</button>
                   )}
                   <button type="button" className="btn btn-quiet btn-sm hide-sm" onClick={doSignOut}>{t('signOut')}</button>
                 </>
@@ -344,7 +358,7 @@ export default function App() {
               {user ? (
                 <>
                   <p className="nav-mobile-user">{t('signedInAs')} {user.email}</p>
-                  {isAdmin && <button type="button" className="btn" onClick={() => { setNavOpen(false); setAdminOpen(true); }}>{t('adminBadge')} · {t('adminTitle')}</button>}
+                  {isAdmin && <button type="button" className="btn" onClick={() => { setNavOpen(false); navigate('admin'); }}>{t('adminBadge')} · {t('dashboard')}</button>}
                   <button type="button" className="btn" onClick={() => { setNavOpen(false); doSignOut(); }}>{t('signOut')}</button>
                 </>
               ) : (
@@ -398,7 +412,11 @@ export default function App() {
                       aria-pressed={i === spotlightIdx}
                       onClick={() => setSpotlightIdx(i)}
                     >
-                      <img src={imageFor(dish, i)} alt="" loading="lazy" />
+                      <img
+                        src={imageFor(dish, i)}
+                        alt="" width="700" height="470" loading="lazy"
+                        onError={(event) => { event.currentTarget.src = imageFallbackUrl(); }}
+                      />
                       <span className="showcase-card-copy">
                         <b>{dish.name}</b>
                         <span>{fmt(dish.price)}</span>
@@ -443,7 +461,7 @@ export default function App() {
                 <div className="filter-group" role="group" aria-label="Category">
                   {categoryOptions.map((c) => (
                     <button key={c.value} type="button" className="btn btn-quiet btn-sm" aria-pressed={category === c.value} onClick={() => setCategory(c.value)}>
-                      {c.value === 'All' ? `${t('all')} ${MENU_DATA.length}` : c.label}
+                      {c.value === 'All' ? `${t('all')} ${activeProducts.length}` : c.label}
                     </button>
                   ))}
                 </div>
@@ -544,7 +562,6 @@ export default function App() {
         reason={authModal.reason}
         onClose={() => setAuthModal({ open: false, reason: '' })}
       />
-      <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
 
       {!chatOpen && (
         <button type="button" className="launcher btn btn-primary" onClick={() => setChatOpen(true)}>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { localizeDish } from '../data.js';
 import { useI18n } from '../i18n.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import { useCart } from '../lib/cart.jsx';
+import { useCatalog } from '../lib/catalog.jsx';
 import { buildOrder, pushOrderToSupabase, saveLocalOrder, updateLocalOrder } from '../lib/orders.js';
 import { confirmPayment, createPayment, getPaymentConfig, loadSnap } from '../lib/payment.js';
 import Dialog from './Dialog.jsx';
@@ -11,6 +11,7 @@ export default function Checkout({ open, onClose, onOrderComplete }) {
   const { t, fmt, lang, currency } = useI18n();
   const { user } = useAuth();
   const { lines, subtotalEur, clear } = useCart();
+  const { products, localizeDish } = useCatalog();
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '' });
   const [notes, setNotes] = useState('');
   const [config, setConfig] = useState({ available: false, enabled: false, clientKey: '' });
@@ -49,7 +50,7 @@ export default function Checkout({ open, onClose, onOrderComplete }) {
     }
     setBusy(true);
     try {
-      const order = buildOrder({ customer, lines, displayCurrency: currency, user, note: notes });
+      const order = buildOrder({ customer, lines, displayCurrency: currency, user, note: notes, products });
       saveLocalOrder(order);
       await pushOrderToSupabase(order);
 

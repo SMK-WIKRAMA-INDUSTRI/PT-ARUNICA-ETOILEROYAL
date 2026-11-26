@@ -200,3 +200,108 @@ create policy "bookings: read own or admin"
 
 -- Optional: let the Node proxy (server.mjs) write payment statuses on webhook.
 -- Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the server only (never VITE_).
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Editable site content: restaurant profile, categories and products
+-- Run supabase/seed_catalog.sql once after this schema to copy the built-in
+-- menu into Supabase. Guests can read active rows; only admins can write.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists public.restaurant_profile (
+  id text primary key default 'main',
+  name text not null,
+  tagline text,
+  tagline_id text,
+  address text,
+  phone text,
+  email text,
+  dress_code text,
+  dress_code_id text,
+  hero_image text,
+  updated_at timestamptz not null default now()
+);
+
+insert into public.restaurant_profile (id, name, tagline, tagline_id, address, phone, email, dress_code, dress_code_id)
+values ('main', 'ÉTOILE ROYALE', 'Where Exceptional Taste Meets Royal Elegance.',
+        'Di Mana Rasa Luar Biasa Bertemu Keanggunan Kerajaan.',
+        '26 Rue Notre-Dame, L-2240 Luxembourg City', '+352 27 86 44 10',
+        'concierge@etoileroyale.lu',
+        'Smart Elegant. Tailored evening attire is appreciated; sportswear and beachwear are politely declined.',
+        'Smart Elegant. Pakaian malam yang rapi sangat dihargai; pakaian olahraga dan pakaian pantai dengan sopan ditolak.')
+on conflict (id) do nothing;
+
+alter table public.restaurant_profile enable row level security;
+drop policy if exists "profile: public read" on public.restaurant_profile;
+create policy "profile: public read" on public.restaurant_profile for select using (true);
+drop policy if exists "profile: admin write" on public.restaurant_profile;
+create policy "profile: admin write" on public.restaurant_profile for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+drop trigger if exists restaurant_profile_touch on public.restaurant_profile;
+create trigger restaurant_profile_touch before update on public.restaurant_profile
+  for each row execute function public.touch_updated_at();
+
+
+create table if not exists public.categories (
+  id text primary key,
+  name text not null,
+  name_id text,
+  sort_order integer not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.categories enable row level security;
+drop policy if exists "categories: public read" on public.categories;
+create policy "categories: public read" on public.categories for select
+  using (active or public.is_admin());
+drop policy if exists "categories: admin write" on public.categories;
+create policy "categories: admin write" on public.categories for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+drop trigger if exists categories_touch on public.categories;
+create trigger categories_touch before update on public.categories
+  for each row execute function public.touch_updated_at();
+
+
+create table if not exists public.products (
+  id text primary key,
+  category_id text references public.categories(id) on delete set null,
+  name text not null,
+  price numeric(10, 2) not null default 0,
+  image_url text,
+  dish_type text,
+  table_index integer,
+  chef_recommended boolean not null default false,
+  gluten_free boolean not null default false,
+  active boolean not null default true,
+  sort_order integer not null default 0,
+  weight text,
+  recommended_temp text,
+  provenance text,
+  provenance_id text,
+  description text,
+  description_id text,
+  ingredients text[] not null default '{}',
+  ingredients_id text[] not null default '{}',
+  flavor_profile text,
+  flavor_profile_id text,
+  pairing text,
+  pairing_id text,
+  allergens text,
+  allergens_id text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists products_category_idx on public.products(category_id, sort_order);
+alter table public.products enable row level security;
+drop policy if exists "products: public read" on public.products;
+create policy "products: public read" on public.products for select
+  using (active or public.is_admin());
+drop policy if exists "products: admin write" on public.products;
+create policy "products: admin write" on public.products for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+drop trigger if exists products_touch on public.products;
+create trigger products_touch before update on public.products
+  for each row execute function public.touch_updated_at();

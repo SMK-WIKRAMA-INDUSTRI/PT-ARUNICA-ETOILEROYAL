@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { imageFallbackUrl } from './foodImages.js';
 import { useI18n } from './i18n.jsx';
 
 const STAT_VALUES = ['A5', '45', '850°C', '5★'];
@@ -7,7 +8,7 @@ const FEATURE_ICONS = ['🔥', '✦', '🏔', '🌿'];
 const FEATURE_TITLE_KEYS = ['feature1Title', 'feature2Title', 'feature3Title', 'feature4Title'];
 const FEATURE_DESC_KEYS = ['feature1Desc', 'feature2Desc', 'feature3Desc', 'feature4Desc'];
 
-export default function LandingPage({ onEnter }) {
+export default function LandingPage({ onEnter, restaurant, menu = [] }) {
   const { t, fmt, isId } = useI18n();
   const heroRef = useRef(null);
   const [quoteIdx, setQuoteIdx] = useState(0);
@@ -22,12 +23,9 @@ export default function LandingPage({ onEnter }) {
     { text: 'An obsessively curated experience from amuse-bouche to gold-dusted fondant.', author: 'Gault & Millau, 2024' },
     { text: 'Étoile Royale treats fire as an art form.', author: 'The Luxembourg Times' }
   ];
-  const dishes = [
-    { name: 'Japanese A5 Wagyu Ribeye', price: 95, tagKey: 'tagChef' },
-    { name: 'Royal Tomahawk Steak', price: 120, tagKey: 'tagDry' },
-    { name: 'Black Truffle Tenderloin', price: 78, tagKey: 'tagGold' },
-    { name: 'The Royal Experience', price: 145, tagKey: 'tagFive' }
-  ];
+  const dishes = menu.filter((dish) => dish.chefRecommended).concat(menu.filter((dish) => !dish.chefRecommended))
+    .slice(0, 4)
+    .map((dish) => ({ name: dish.name, price: dish.price, tag: dish.chefRecommended ? t('tagChef') : dish.category }));
 
   useEffect(() => {
     const timer = setTimeout(() => setLoaded(true), 60);
@@ -52,14 +50,19 @@ export default function LandingPage({ onEnter }) {
   return (
     <div className={`landing ${loaded ? 'landing--visible' : ''}`}>
       {/* ── HERO ─────────────────────────────────────────── */}
-      <section className="lp-hero" ref={heroRef} aria-label="Welcome to Étoile Royale">
+      <section
+        className="lp-hero"
+        ref={heroRef}
+        aria-label={`Welcome to ${restaurant?.name || 'Étoile Royale'}`}
+        style={restaurant?.heroImage ? { '--lp-hero-image': `url("${restaurant.heroImage}")` } : undefined}
+      >
         <div className="lp-hero-overlay" aria-hidden="true" />
         <div className="lp-hero-grain" aria-hidden="true" />
 
         <header className="lp-nav container">
           <div className="lp-brand">
             <span className="lp-brand-star" aria-hidden="true">✦</span>
-            <span>ÉTOILE ROYALE</span>
+            <span>{restaurant?.name || 'ÉTOILE ROYALE'}</span>
           </div>
           <nav className="lp-nav-links" aria-label="Quick links">
             <a href="#lp-story">{t('lpNavStory')}</a>
@@ -145,11 +148,12 @@ export default function LandingPage({ onEnter }) {
         <div className="lp-story-image" aria-hidden="true">
           <div className="lp-img-frame">
             <img
-              src="https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=900&q=80"
+              src={restaurant?.heroImage || imageFallbackUrl()}
               alt={t('chefImageAlt')}
               loading="lazy"
               width="900"
               height="600"
+              onError={(event) => { event.currentTarget.src = imageFallbackUrl(); }}
             />
             <div className="lp-img-badge">
               <span className="lp-img-badge-star">✦</span>
@@ -195,11 +199,11 @@ export default function LandingPage({ onEnter }) {
           </div>
         </div>
         <div className="lp-menu-dishes" aria-hidden="true">
-          {dishes.map(({ name, price, tagKey }) => (
+          {dishes.map(({ name, price, tag }) => (
             <button key={name} type="button" className="lp-dish-row" onClick={onEnter}>
               <div>
                 <span className="lp-dish-name">{name}</span>
-                <span className="lp-dish-tag">{t(tagKey)}</span>
+                <span className="lp-dish-tag">{tag}</span>
               </div>
               <span className="lp-dish-price">{fmt(price)}</span>
             </button>
@@ -214,10 +218,9 @@ export default function LandingPage({ onEnter }) {
             <p className="lp-section-eyebrow">{t('findUs')}</p>
             <h2 id="visit-heading" className="lp-h2">{t('lpVisitTitle')}</h2>
             <address className="lp-address">
-              26 Rue Notre-Dame<br />
-              L-2240 Luxembourg City<br />
-              <a href="tel:+35227864410">+352 27 86 44 10</a><br />
-              <a href="mailto:concierge@etoileroyale.lu">concierge@etoileroyale.lu</a>
+              {restaurant?.address || '26 Rue Notre-Dame, L-2240 Luxembourg City'}<br />
+              <a href={`tel:${String(restaurant?.phone || '').replace(/\s/g, '')}`}>{restaurant?.phone}</a><br />
+              <a href={`mailto:${restaurant?.email || ''}`}>{restaurant?.email}</a>
             </address>
             <dl className="lp-hours">
               <div><dt>{isId ? 'Sel – Jum' : 'Tue – Fri'}</dt><dd>18:00 – 23:30</dd></div>
@@ -244,8 +247,8 @@ export default function LandingPage({ onEnter }) {
       <footer className="lp-footer">
         <div className="container lp-footer-inner">
           <div>
-            <p className="lp-brand-name-footer">ÉTOILE ROYALE</p>
-            <p className="lp-footer-meta">26 Rue Notre-Dame, L-2240 Luxembourg City</p>
+            <p className="lp-brand-name-footer">{restaurant?.name || 'ÉTOILE ROYALE'}</p>
+            <p className="lp-footer-meta">{restaurant?.address}</p>
           </div>
           <div className="lp-footer-right">
             <button type="button" className="lp-btn lp-btn-ghost lp-btn-sm" onClick={onEnter}>

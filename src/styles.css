@@ -1345,3 +1345,175 @@ option { background: #21182d; color: #fff4e5; }
   .cart-drawer { padding: 16px; }
   .admin-tabs { flex-wrap: wrap; }
 }
+
+/* ── Light fine-dining theme ────────────────────────────────────────────────
+   Tokens only: component rules below already reference var(--...). The extra
+   overrides replace a few deliberately dark surfaces that are part of the
+   editorial "carte" look and should stay dark in both modes. */
+[data-theme='light'] {
+  --bg: #f7f1e7;
+  --bg-alt: #fffaf2;
+  --panel: rgba(255, 253, 247, 0.88);
+  --ink: #2b1b2c;
+  --muted: #6f5e69;
+  --line: rgba(86, 48, 72, 0.16);
+  --accent: #97591f;
+  --on-accent: #fff8ec;
+  --ok: #2f7d4b;
+  --shadow: 0 24px 70px rgba(73, 38, 30, 0.14);
+  color-scheme: light;
+}
+[data-theme='light'] .spotlight,
+[data-theme='light'] .res-summary,
+[data-theme='light'] .concierge {
+  background: rgba(255, 253, 247, 0.92);
+  border-color: rgba(86, 48, 72, 0.16);
+  box-shadow: var(--shadow);
+}
+[data-theme='light'] .spotlight .spot-copy { color: var(--muted); }
+[data-theme='light'] .search,
+[data-theme='light'] .field input,
+[data-theme='light'] .field select,
+[data-theme='light'] .field textarea,
+[data-theme='light'] .chat-form input {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(86, 48, 72, 0.2);
+}
+[data-theme='light'] .search:focus,
+[data-theme='light'] .field input:focus,
+[data-theme='light'] .field select:focus,
+[data-theme='light'] .field textarea:focus,
+[data-theme='light'] .chat-form input:focus { border-color: var(--accent); outline-color: rgba(151, 89, 31, 0.22); }
+[data-theme='light'] .msg-assistant > p {
+  border-color: rgba(86, 48, 72, 0.14);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink);
+}
+[data-theme='light'] .recommendation-card {
+  border-color: rgba(86, 48, 72, 0.14);
+  background: rgba(255, 253, 247, 0.94);
+  box-shadow: var(--shadow);
+}
+[data-theme='light'] .recommendation-copy > p { color: var(--muted); }
+[data-theme='light'] .recommendation-temp { color: var(--accent); }
+[data-theme='light'] .lc-btn.is-active { color: var(--on-accent); }
+
+/* ── Image consistency ──────────────────────────────────────────────────────
+   Every photo gets a fixed crop box, a tinted placeholder while it loads and
+   object-fit: cover, so admin-entered URLs cannot stretch or jump the grid. */
+.showcase-card { aspect-ratio: 4 / 3; }
+.showcase-card img { object-position: center; background: #4a2b36; }
+.book-image { aspect-ratio: 16 / 10; }
+.book-image img { height: 100%; min-height: 0; object-position: center; background: #6d2a3c; }
+.recommendation-image { aspect-ratio: 3 / 2; height: auto; }
+.recommendation-image img { object-position: center; background: #6d2a3c; }
+.cart-line img,
+.admin-thumb,
+.admin-preview img {
+  flex: 0 0 auto;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  object-fit: cover;
+  object-position: center;
+  background: linear-gradient(135deg, #6d2a3c, #b96b3a);
+}
+.lp-img-frame img { background: #6d2a3c; }
+img[src=''] { visibility: hidden; }
+
+/* ── Admin console ─────────────────────────────────────────────────────────── */
+.admin-shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; background: var(--bg); color: var(--ink); }
+.admin-sidebar {
+  position: sticky; top: 0; display: flex; flex-direction: column; gap: 22px;
+  height: 100vh; padding: 26px 18px; border-right: 1px solid var(--line); background: var(--bg-alt);
+}
+.admin-brand { display: flex; align-items: center; gap: 12px; padding: 0 6px 18px; border-bottom: 1px solid var(--line); }
+.admin-brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 1.1rem; }
+.admin-brand b { display: block; font: 600 .92rem var(--serif); letter-spacing: .08em; }
+.admin-brand small { display: block; margin-top: 3px; color: var(--muted); font: 600 .66rem var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+.admin-nav { display: grid; gap: 4px; }
+.admin-nav button {
+  display: flex; align-items: center; gap: 11px; width: 100%; min-height: 42px; padding: 0 12px;
+  border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted);
+  font: 600 .86rem var(--sans); text-align: left; cursor: pointer;
+}
+.admin-nav button span { width: 18px; color: var(--accent); font-size: .95rem; }
+.admin-nav button:hover { background: rgba(241, 173, 71, .08); color: var(--ink); }
+.admin-nav button.is-active { border-color: rgba(241, 173, 71, .35); background: rgba(241, 173, 71, .14); color: var(--ink); }
+.admin-sidebar-foot { display: grid; gap: 8px; margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line); }
+.admin-sidebar-foot .meta { overflow-wrap: anywhere; font-size: .74rem; line-height: 1.5; }
+.admin-main { display: flex; flex-direction: column; min-width: 0; }
+.admin-topbar {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 68px; padding: 10px clamp(18px, 3vw, 34px); border-bottom: 1px solid var(--line);
+  background: var(--bg); backdrop-filter: blur(12px);
+}
+.admin-topbar-title { display: grid; gap: 2px; }
+.admin-topbar-title b { font: 600 1.05rem var(--serif); }
+.admin-topbar-actions { display: flex; align-items: center; gap: 8px; }
+.admin-source { padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font: 700 .64rem var(--sans); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.admin-menu-toggle { display: none; }
+.admin-content { display: grid; gap: 20px; padding: clamp(22px, 3vw, 38px); max-width: 1500px; width: 100%; margin: 0 auto; }
+.admin-page-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+.admin-notice { margin-bottom: -4px; }
+.admin-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 12px; }
+.admin-stat { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.admin-stat span { color: var(--muted); font: 600 .68rem var(--sans); letter-spacing: .09em; text-transform: uppercase; }
+.admin-stat b { font: 600 1.55rem var(--serif); font-variant-numeric: tabular-nums; }
+.admin-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.admin-card { min-width: 0; display: grid; align-content: start; gap: 16px; padding: clamp(18px, 2vw, 26px); border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: var(--shadow); }
+.admin-card h2 { font: 600 1.2rem var(--serif); }
+.admin-card-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.admin-split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 18px; align-items: start; }
+.admin-split.wide { grid-template-columns: minmax(0, 1.3fr) minmax(340px, .7fr); }
+.admin-list { display: grid; gap: 8px; max-height: min(60vh, 560px); overflow-y: auto; }
+.admin-row { display: flex; justify-content: space-between; gap: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, .035); }
+.admin-row-main, .admin-row-side { display: grid; gap: 3px; align-content: start; min-width: 0; }
+.admin-row-main .meta { overflow-wrap: anywhere; font-size: .76rem; }
+.admin-row-side { justify-items: end; white-space: nowrap; }
+.admin-row-side > b { font: 600 .92rem var(--serif); }
+.admin-empty { padding: 24px; color: var(--muted); text-align: center; }
+.admin-table { display: grid; gap: 6px; }
+.admin-table-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto auto auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; }
+.admin-table-row > div:nth-child(2) { min-width: 0; }
+.admin-table-row b, .admin-table-row .meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-table-row .meta { font-size: .7rem; }
+.admin-price { color: var(--accent); font: 600 .9rem var(--serif); white-space: nowrap; }
+.admin-row-actions { display: flex; gap: 8px; }
+.link-button { padding: 0; border: 0; background: none; color: var(--accent); font: 600 .78rem var(--sans); cursor: pointer; }
+.link-button:hover { text-decoration: underline; }
+.link-button.danger, .danger { color: #e98b83; }
+[data-theme='light'] .link-button.danger, [data-theme='light'] .danger { color: #a3342c; }
+.admin-form { display: grid; gap: 14px; }
+.admin-form .field { display: grid; gap: 6px; }
+.admin-form .field > span { color: var(--muted); font: 600 .7rem var(--sans); letter-spacing: .06em; text-transform: uppercase; }
+.admin-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.admin-span-2 { grid-column: 1 / -1; }
+.check-field { display: flex; align-items: center; gap: 8px; min-height: 38px; color: var(--muted); font: 600 .8rem var(--sans); }
+.check-field input { accent-color: var(--accent); }
+.admin-preview { display: grid; gap: 7px; justify-items: start; }
+.admin-preview img { width: 240px; max-width: 100%; border: 1px solid var(--line); border-radius: 12px; }
+.admin-preview .meta { font-size: .72rem; }
+.admin-settings { max-width: 900px; }
+.admin-gate, .admin-loading { display: grid; place-items: center; min-height: 100vh; padding: 24px; background: var(--bg); color: var(--ink); }
+.admin-gate-card { display: grid; gap: 16px; justify-items: start; width: min(520px, 100%); padding: clamp(26px, 4vw, 42px); border: 1px solid var(--line); border-radius: 20px; background: var(--panel); box-shadow: var(--shadow); }
+.admin-gate-card h1 { font: 600 2rem var(--serif); }
+.admin-toast { position: fixed; right: 22px; bottom: 22px; z-index: 80; }
+
+@media (max-width: 1080px) {
+  .admin-split, .admin-split.wide { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .admin-shell { grid-template-columns: 1fr; }
+  .admin-sidebar {
+    position: fixed; z-index: 30; inset: 0 auto 0 0; width: min(280px, 84vw); height: 100dvh;
+    transform: translateX(-105%); transition: transform .2s ease; box-shadow: var(--shadow);
+  }
+  .admin-sidebar.is-open { transform: translateX(0); }
+  .admin-menu-toggle { display: inline-flex; }
+  .admin-topbar { padding: 10px 16px; }
+  .admin-topbar-actions .admin-source { display: none; }
+  .admin-form-grid { grid-template-columns: 1fr; }
+  .admin-table-row { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .admin-price { grid-column: 2; }
+  .admin-row-actions { grid-column: 2 / -1; }
+}

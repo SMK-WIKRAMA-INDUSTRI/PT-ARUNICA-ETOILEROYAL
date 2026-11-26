@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { MENU_DATA } from '../data.js';
+import { useCatalog } from './catalog.jsx';
 
 const CART_KEY = 'etoile.cart';
 
@@ -8,7 +8,7 @@ function readCart() {
     const stored = JSON.parse(window.localStorage.getItem(CART_KEY) || '[]');
     if (!Array.isArray(stored)) return [];
     return stored
-      .filter((item) => MENU_DATA.some((dish) => dish.id === item?.id))
+      .filter((item) => item?.id)
       .map((item) => ({ id: item.id, qty: Math.max(1, Math.min(20, Number(item.qty) || 1)) }));
   } catch {
     return [];
@@ -18,6 +18,7 @@ function readCart() {
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
+  const { activeProducts } = useCatalog();
   const [items, setItems] = useState(readCart);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -49,9 +50,9 @@ export function CartProvider({ children }) {
   const clear = useCallback(() => setItems([]), []);
 
   const lines = useMemo(() => items.map((item) => {
-    const dish = MENU_DATA.find((entry) => entry.id === item.id);
-    return { id: item.id, qty: item.qty, dish, unitPriceEur: dish?.price || 0 };
-  }).filter((line) => Boolean(line.dish)), [items]);
+    const dish = activeProducts.find((entry) => entry.id === item.id);
+    return { id: item.id, qty: item.qty, dish, unitPriceEur: Number(dish?.price) || 0 };
+  }).filter((line) => Boolean(line.dish)), [items, activeProducts]);
 
   const count = useMemo(() => lines.reduce((sum, line) => sum + line.qty, 0), [lines]);
   const subtotalEur = useMemo(

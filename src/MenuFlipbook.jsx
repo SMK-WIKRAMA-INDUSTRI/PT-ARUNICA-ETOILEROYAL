@@ -1,22 +1,6 @@
 import { useRef, useState } from 'react';
 import { useI18n } from './i18n.jsx';
-
-const IMAGES = [
-  'photo-1546833999-b9f581a1996d',
-  'photo-1544025162-d76694265947',
-  'photo-1600891964599-f61ba0e24092',
-  'photo-1558030006-450675393462',
-  'photo-1547592180-85f173990554',
-  'photo-1551024506-0bccd828d307'
-];
-
-const imageFor = (dish, index) => {
-  const imageIndex = dish.dishType === 'tomahawk' ? 3
-    : dish.dishType === 'filet' ? 2
-      : dish.dishType === 'fondant' || dish.dishType === 'pistachio' ? 5
-        : index % IMAGES.length;
-  return `https://images.unsplash.com/${IMAGES[imageIndex]}?auto=format&fit=crop&w=1100&q=85`;
-};
+import { imageFallbackUrl, imageFor } from './foodImages.js';
 
 export default function MenuFlipbook({ items, page, onPage, onDetails, onReserve, onAdd, onClearFilters, fmt }) {
   const { t } = useI18n();
@@ -54,7 +38,13 @@ export default function MenuFlipbook({ items, page, onPage, onDetails, onReserve
           return (
             <article className="book-page" key={dish.id}>
               <div className="book-image">
-                <img src={imageFor(dish, absoluteIndex)} alt={`${dish.name}, Étoile Royale`} loading="lazy" />
+                <img
+                  src={imageFor(dish, absoluteIndex, 1100)}
+                  alt={`${dish.name}, Étoile Royale`}
+                  width="1100" height="730"
+                  loading="lazy"
+                  onError={(event) => { event.currentTarget.src = imageFallbackUrl(); }}
+                />
                 <span className="receipt-stamp">{dish.chefRecommended ? 'CHEF PICK' : dish.category}</span>
                 <span className="image-index">0{absoluteIndex + 1} / {String(items.length).padStart(2, '0')}</span>
               </div>
