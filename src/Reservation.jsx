@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { MENU_DATA, RESTAURANT, localizeDish } from './data.js';
 import { useI18n } from './i18n.jsx';
+import { pushBookingToSupabase, saveLocalBooking } from './lib/orders.js';
 
 const SALON = 'Salon Privé Royal';
 const BIG_PARTY = '8–16 Guests (Salon Privé Royal)';
@@ -27,7 +28,7 @@ function timesFor(date) {
   return ['18:00', '19:30', '20:30', '21:30', '22:30'];
 }
 
-export default function Reservation({ form, setForm, lang, currency }) {
+export default function Reservation({ form, setForm, lang, currency, user, onRequireLogin }) {
   const { t, fmt, isId } = useI18n();
   const [error, setError] = useState('');
   const [prepared, setPrepared] = useState(false);
@@ -82,7 +83,29 @@ export default function Reservation({ form, setForm, lang, currency }) {
       setError(t('errorPastDate'));
       return;
     }
+    // Booking is a long-term commitment: members only. Food orders stay guest-friendly.
+    if (!user) {
+      setError(t('bookingLoginBody'));
+      onRequireLogin?.('booking');
+      return;
+    }
     setError('');
+    const booking = {
+      bookingRef: `BK-${Date.now().toString(36).toUpperCase()}`,
+      guestName: form.name.trim(),
+      guestEmail: form.email.trim(),
+      guestPhone: form.phone.trim(),
+      bookingDate: form.date,
+      bookingTime: form.time,
+      guests: guestLabel(form.guests),
+      seating: seatingLabel(form.seating),
+      dishId: dish.id,
+      notes: form.notes.trim(),
+      status: 'requested',
+      createdAt: new Date().toISOString()
+    };
+    saveLocalBooking(booking);
+    pushBookingToSupabase(booking, user);
     const body = [
       t('reservationRequest'),
       '',
@@ -102,6 +125,16 @@ export default function Reservation({ form, setForm, lang, currency }) {
   return (
     <div className="res-grid">
       <form onSubmit={submit} className="res-form" noValidate>
+        {!user && (
+          <div className="booking-gate">
+            <div>
+              <b>{t('bookingLoginTitle')}</b>
+              <p>{t('bookingLoginBody')}</p>
+            </div>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => onRequireLogin?.('booking')}>{t('signInToBook')}</button>
+          </div>
+        )}
+
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -206,7 +239,7 @@ export default function Reservation({ form, setForm, lang, currency }) {
         </dl>
         {prepared && (
           <p className="notice" role="status">
-            {t('preparedNoteA')}{' '}
+            {t('bookingSaved')} {t('preparedNoteA')}{' '}
             <a href={`mailto:${RESTAURANT.email}`}>{RESTAURANT.email}</a> {t('preparedNoteB')} {RESTAURANT.phone}.
           </p>
         )}

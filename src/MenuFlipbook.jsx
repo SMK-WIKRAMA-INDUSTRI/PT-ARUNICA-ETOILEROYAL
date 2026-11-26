@@ -18,7 +18,7 @@ const imageFor = (dish, index) => {
   return `https://images.unsplash.com/${IMAGES[imageIndex]}?auto=format&fit=crop&w=1100&q=85`;
 };
 
-export default function MenuFlipbook({ items, page, onPage, onDetails, onReserve, onClearFilters, fmt }) {
+export default function MenuFlipbook({ items, page, onPage, onDetails, onReserve, onAdd, onClearFilters, fmt }) {
   const { t } = useI18n();
   const [direction, setDirection] = useState('');
   const touchStart = useRef(null);
@@ -73,6 +73,7 @@ export default function MenuFlipbook({ items, page, onPage, onDetails, onReserve
                 <div className="book-actions">
                   <button type="button" className="btn btn-quiet btn-sm" onClick={() => onDetails(dish)}>{t('tastingNotes')}</button>
                   <button type="button" className="btn btn-primary btn-sm" onClick={() => onReserve(dish)}>{t('addToBooking')}</button>
+                  <button type="button" className="btn btn-quiet btn-sm cart-add" onClick={() => onAdd(dish)} aria-label={`${t('addToCart')}: ${dish.name}`}>+ {t('addToCart')}</button>
                 </div>
               </div>
             </article>

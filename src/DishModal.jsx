@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useI18n } from './i18n.jsx';
 import { useDialog } from './hooks.js';
 
-export default function DishModal({ dish, onClose, onReserve }) {
+export default function DishModal({ dish, onClose, onReserve, onAdd }) {
   const { t, fmt } = useI18n();
   const ref = useRef(null);
   const closeRef = useRef(null);
@@ -39,7 +39,10 @@ export default function DishModal({ dish, onClose, onReserve }) {
         </dl>
 
         <div className="actions">
-          <button type="button" className="btn btn-primary" onClick={() => onReserve(dish)}>
+          <button type="button" className="btn btn-primary" onClick={() => onAdd(dish)}>
+            {t('addToCart')} · {fmt(dish.price)}
+          </button>
+          <button type="button" className="btn" onClick={() => onReserve(dish)}>
             {t('bookWithDish')}
           </button>
         </div>

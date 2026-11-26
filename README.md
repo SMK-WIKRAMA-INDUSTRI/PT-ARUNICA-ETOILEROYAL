@@ -61,6 +61,11 @@ npm run test:e2e
 | `VITE_CONCIERGE_PROXY_URL` | URL proxy yang dipanggil situs. Development: `http://localhost:8787/concierge`. |
 | `API_DIAGRAM_VOICE` | Kunci untuk input suara Deepgram. Vite memasukkan variabel berprefix `API_` ke bundle browser, jadi nilainya dapat dilihat pengguna situs. Jangan taruh kredensial server atau key berizin luas di sini; kosongkan jika fitur suara tidak dipakai. |
 | `CORS_ORIGIN` | Origin situs yang diizinkan oleh proxy saat deployment, misalnya `https://contoh.com`. Secara default proxy memakai `*`; atur eksplisit untuk produksi. |
+| `MIDTRANS_SERVER_KEY` | Server key **sandbox** Midtrans. Hanya dibaca `server.mjs`; jangan pernah memakai prefix `VITE_` / `API_`. |
+| `VITE_MIDTRANS_CLIENT_KEY` | Client key sandbox Midtrans (publik) untuk Snap popup di browser. |
+| `VITE_PAYMENT_PROXY_URL` | URL proxy pembayaran, default `http://localhost:8787`. |
+| `MIDTRANS_API_URL` | Endpoint Midtrans; default `https://api.sandbox.midtrans.com`. |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Opsional, server-only. Memungkinkan webhook Midtrans memperbarui status pesanan di Supabase. |
 
 `.env` dibaca oleh proxy Node dan Vite. File tersebut sudah diabaikan Git. Untuk perubahan kode atau kredensial, jangan menempelkan nilai rahasia ke tiket publik, dokumentasi, atau source control.
 
@@ -74,6 +79,23 @@ Saat development, pertahankan `VITE_CONCIERGE_PROXY_URL=http://localhost:8787/co
 
 Jika API key pernah dimasukkan ke variabel `VITE_` atau terpaket ke build publik sebelumnya, rotasi key tersebut dari dashboard penyedia.
 
+## Akun, keranjang, dan checkout
+
+- **Tamu boleh memesan.** Tambah hidangan ke keranjang dari menu, spotlight, atau modal hidangan, lalu checkout tanpa akun. Harga ditampilkan sesuai pilihan IDR/USD; Midtrans menagih dalam Rupiah.
+- **Reservasi butuh akun.** Karena bersifat jangka panjang, permintaan meja hanya dikirim oleh anggota yang sudah masuk. Form tetap dapat diisi untuk melihat validasi; tombol kirim akan membuka dialog masuk jika belum login.
+- **Login:** jalankan `supabase/schema.sql` di SQL Editor, lalu daftar atau masuk lewat tombol **Sign in** di header. Untuk menjadikan akun admin:
+
+  ```sql
+  update public.profiles set role = 'admin'
+  where id = (select id from auth.users where email = 'email-anda@domain.com');
+  ```
+
+- **Akun demo:** dialog masuk menyediakan **Continue as member** dan **Continue as admin**. Akun ini hanya tersimpan di browser (`localStorage`) dan sengaja diberi label demo; berguna mencoba alur sebelum Supabase dikonfigurasi. Panel admin menampilkan pesanan dan permintaan reservasi dari browser ini (atau dari Supabase jika admin masuk dengan akun nyata).
+- **Pembayaran:** isi `MIDTRANS_SERVER_KEY` dan `VITE_MIDTRANS_CLIENT_KEY` dengan kunci sandbox untuk memakai Snap popup. `npm run dev` sudah menjalankan proxy di port 8787 yang membuat Snap token dan memverifikasi status transaksi. Webhook `/midtrans/notification` tersedia untuk deployment (verifikasi signature SHA512); untuk percobaan lokal, tombol sukses di Snap memanggil `/midtrans/confirm`.
+- **Tanpa kunci Midtrans:** checkout otomatis memakai **sandbox demo** — tidak ada tagihan nyata, pesanan ditandai `demo-paid`, dan UI menyebut hal ini secara eksplisit.
+
+Untuk menerima webhook Midtrans, proxy harus dapat diakses publik (HTTPS). Midtrans tidak dapat mengirim notifikasi ke `localhost`.
+
 ## Struktur proyek
 
 | Lokasi | Isi |
@@ -85,7 +107,10 @@ Jika API key pernah dimasukkan ke variabel `VITE_` atau terpaket ke build publik
 | `src/Reservation.jsx` | Formulir permintaan reservasi. |
 | `src/Concierge.jsx`, `src/concierge.js` | Panel chat dan logika concierge. |
 | `src/i18n.jsx`, `src/currency.js` | Terjemahan, bahasa, mata uang, dan format harga. |
-| `server.mjs` | Proxy concierge Node.js. |
+| `src/lib/auth.jsx`, `src/lib/cart.jsx`, `src/lib/orders.js`, `src/lib/payment.js` | Autentikasi + peran, keranjang, pesanan/reservasi, dan klien pembayaran. |
+| `src/components/` | Dialog masuk, keranjang, checkout, dan panel admin. |
+| `server.mjs` | Proxy Node.js untuk concierge dan Midtrans sandbox. |
+| `supabase/schema.sql` | Skema chat, profil/admin, pesanan, dan reservasi beserta RLS. |
 | `DESIGN.md` | Catatan sistem desain. |
 
 ## Sebelum peluncuran

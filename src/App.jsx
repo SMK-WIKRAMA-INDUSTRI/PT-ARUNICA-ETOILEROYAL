@@ -7,9 +7,15 @@ import { getServiceStatus } from './hours.js';
 import { askConcierge, groundedReply, isLive } from './concierge.js';
 import { ensureChatSession, loadChatMessages, saveChatMessage } from './lib/chatStore.js';
 import { isSupabaseConfigured } from './lib/supabase.js';
+import { useAuth } from './lib/auth.jsx';
+import { useCart } from './lib/cart.jsx';
 import { imageFor } from './foodImages.js';
 import { useTheme } from './hooks.js';
 import { CURRENCY_OPTIONS, LANGUAGES, useI18n } from './i18n.jsx';
+import AdminPanel from './components/AdminPanel.jsx';
+import AuthModal from './components/AuthModal.jsx';
+import CartDrawer from './components/CartDrawer.jsx';
+import Checkout from './components/Checkout.jsx';
 import Concierge from './Concierge.jsx';
 import DishModal from './DishModal.jsx';
 import MenuFlipbook from './MenuFlipbook.jsx';
@@ -18,6 +24,8 @@ import LandingPage from './LandingPage.jsx';
 
 export default function App() {
   const { lang, setLang, currency, setCurrency, t, fmt } = useI18n();
+  const { user, isAdmin, ready: authReady, signOut } = useAuth();
+  const { count: cartCount, addItem, isOpen: cartOpen, openCart, closeCart } = useCart();
 
   const scrollToApp = () => {
     document.getElementById('restaurant-app')?.scrollIntoView({ behavior: 'smooth' });
@@ -45,6 +53,9 @@ export default function App() {
 
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
+  const [authModal, setAuthModal] = useState({ open: false, reason: '' });
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: 'assistant', content: t('greeting'), recommendedIds: ['wagyu-ribeye', 'the-royal-experience'] }]);
@@ -94,9 +105,9 @@ export default function App() {
     )));
   }, [t]);
 
-  // Restore chat session from Supabase on first mount.
+  // Restore chat session from Supabase, re-scoping it when the account changes.
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !authReady || !user || user.isDemo) return;
     let cancelled = false;
     (async () => {
       try {
@@ -112,7 +123,7 @@ export default function App() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authReady, user?.id]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -122,11 +133,32 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    setForm((current) => ({
+      ...current,
+      name: current.name || user.full_name || '',
+      email: current.email || user.email || ''
+    }));
+  }, [user?.id, user?.full_name, user?.email]);
+
   const showToast = useCallback((text) => {
     setToast(text);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 3400);
   }, []);
+
+  const openAuth = (reason = '') => setAuthModal({ open: true, reason });
+
+  const addToCart = (dish) => {
+    addItem(dish);
+    showToast(`${dish.name} ${t('addedToCart')}`);
+  };
+
+  const doSignOut = async () => {
+    await signOut();
+    showToast(t('continueAsGuest'));
+  };
 
   const goTo = (id) => {
     setNavOpen(false);
@@ -267,6 +299,28 @@ export default function App() {
               <button type="button" className="btn btn-quiet btn-sm hide-sm" onClick={() => setChatOpen(true)}>
                 {t('concierge')}
               </button>
+              <button type="button" className="cart-button" onClick={openCart} aria-label={`${t('cartTitle')} (${cartCount})`}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 4h2l2.2 11a2 2 0 0 0 2 1.6h8.1a2 2 0 0 0 2-1.6L20.5 8H6.2" />
+                  <circle cx="9" cy="20" r="1.2" /><circle cx="17" cy="20" r="1.2" />
+                </svg>
+                <span>{t('cartTitle')}</span>
+                {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
+              </button>
+              {user ? (
+                <>
+                  <span className="account-chip hide-sm" title={`${t('signedInAs')} ${user.email}`}>
+                    <span className="account-avatar" aria-hidden="true">{(user.full_name || user.email || 'E').charAt(0).toUpperCase()}</span>
+                    <span>{isAdmin ? t('roleAdmin') : t('roleMember')}</span>
+                  </span>
+                  {isAdmin && (
+                    <button type="button" className="btn btn-quiet btn-sm hide-sm admin-link" onClick={() => setAdminOpen(true)}>{t('adminBadge')}</button>
+                  )}
+                  <button type="button" className="btn btn-quiet btn-sm hide-sm" onClick={doSignOut}>{t('signOut')}</button>
+                </>
+              ) : (
+                <button type="button" className="btn btn-quiet btn-sm hide-sm" onClick={() => openAuth()}>{t('signIn')}</button>
+              )}
               <a href="#reservations" className="btn btn-primary btn-sm hide-sm">{t('reserve')}</a>
               <button type="button" className="btn btn-quiet btn-sm show-sm" aria-expanded={navOpen} aria-controls="mobile-nav" onClick={() => setNavOpen(!navOpen)}>
                 {navOpen ? t('close') : t('menuButton')}
@@ -284,6 +338,18 @@ export default function App() {
               <div className="nav-mobile-controls">
                 {languageControls('')}
               </div>
+              <button type="button" className="btn" onClick={() => { setNavOpen(false); openCart(); }}>
+                {t('cartTitle')} {cartCount > 0 ? `(${cartCount})` : ''}
+              </button>
+              {user ? (
+                <>
+                  <p className="nav-mobile-user">{t('signedInAs')} {user.email}</p>
+                  {isAdmin && <button type="button" className="btn" onClick={() => { setNavOpen(false); setAdminOpen(true); }}>{t('adminBadge')} · {t('adminTitle')}</button>}
+                  <button type="button" className="btn" onClick={() => { setNavOpen(false); doSignOut(); }}>{t('signOut')}</button>
+                </>
+              ) : (
+                <button type="button" className="btn" onClick={() => { setNavOpen(false); openAuth(); }}>{t('signIn')}</button>
+              )}
               <button type="button" className="btn" onClick={() => { setNavOpen(false); setChatOpen(true); }}>{t('concierge')}</button>
               <button type="button" className="btn" onClick={toggleTheme} aria-pressed={theme === 'dark'}>
                 {theme === 'dark' ? t('lightTheme') : t('darkTheme')}
@@ -354,7 +420,8 @@ export default function App() {
                     <div><dt>{t('pairing')}</dt><dd>{spotlight.pairing}</dd></div>
                   </dl>
                   <div className="actions">
-                    <button type="button" className="btn btn-primary" onClick={() => reserveWith(spotlight)}>{t('bookWithDish')}</button>
+                    <button type="button" className="btn btn-primary" onClick={() => addToCart(spotlight)}>+ {t('addToCart')}</button>
+                    <button type="button" className="btn" onClick={() => reserveWith(spotlight)}>{t('bookWithDish')}</button>
                     <button type="button" className="btn" onClick={() => askAbout(spotlight)}>{t('askConcierge')}</button>
                   </div>
                 </article>
@@ -398,6 +465,7 @@ export default function App() {
                 onPage={setMenuPage}
                 onDetails={setModalDish}
                 onReserve={reserveWith}
+                onAdd={addToCart}
                 onClearFilters={resetFilters}
                 fmt={fmt}
               />
@@ -448,7 +516,7 @@ export default function App() {
                 <h2 className="h2">{t('reserveYourTable')}</h2>
                 <p className="lede-dark">{t('reserveLede')}</p>
               </header>
-              <Reservation form={form} setForm={setForm} lang={lang} currency={currency} />
+              <Reservation form={form} setForm={setForm} lang={lang} currency={currency} user={user} onRequireLogin={openAuth} />
             </div>
           </section>
         </main>
@@ -467,7 +535,16 @@ export default function App() {
         </footer>
       </div>
 
-      <DishModal dish={modalDish} onClose={() => setModalDish(null)} onReserve={reserveWith} />
+      <DishModal dish={modalDish} onClose={() => setModalDish(null)} onReserve={reserveWith} onAdd={addToCart} />
+
+      <CartDrawer open={cartOpen} onClose={closeCart} onCheckout={() => setCheckoutOpen(true)} />
+      <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} />
+      <AuthModal
+        open={authModal.open}
+        reason={authModal.reason}
+        onClose={() => setAuthModal({ open: false, reason: '' })}
+      />
+      <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
 
       {!chatOpen && (
         <button type="button" className="launcher btn btn-primary" onClick={() => setChatOpen(true)}>

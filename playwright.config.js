@@ -17,7 +17,13 @@ export default defineConfig({
     command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
-    env: { ...process.env, VITE_CONCIERGE_PROXY_URL: '' },
+    // Use an isolated proxy port so tests never reuse a stale dev server.
+    env: {
+      ...process.env,
+      VITE_CONCIERGE_PROXY_URL: '',
+      PORT: '8791',
+      VITE_PAYMENT_PROXY_URL: 'http://127.0.0.1:8791'
+    },
     timeout: 30_000
   }
 });

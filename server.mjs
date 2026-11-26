@@ -8,11 +8,12 @@
 // Configure DEEPSEEK_API_KEY (and optionally DEEPSEEK_MODEL / PORT) in .env.
 
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { localizeHours, localizeMenu, localizeRestaurant } from './src/data.js';
-import { formatPrice } from './src/currency.js';
+import { localizeHours, localizeMenu, localizeRestaurant, MENU_DATA } from './src/data.js';
+import { convertFromEur, formatPrice } from './src/currency.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,6 +43,16 @@ const COMPLETIONS_URL = /\/chat\/completions$/i.test(BASE_URL)
   : `${BASE_URL}/chat/completions`;
 const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || '*';
+
+// Payment credentials stay on this server. Never expose MIDTRANS_SERVER_KEY
+// through a VITE_/API_ prefix — Vite inlines those into the public bundle.
+const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY || '';
+const MIDTRANS_CLIENT_KEY = (process.env.VITE_MIDTRANS_CLIENT_KEY || process.env.MIDTRANS_CLIENT_KEY || '').trim();
+const MIDTRANS_API = (process.env.MIDTRANS_API_URL || 'https://api.sandbox.midtrans.com').trim().replace(/\/+$/, '');
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const paymentEnabled = Boolean(MIDTRANS_SERVER_KEY && MIDTRANS_CLIENT_KEY);
+const midtransAuth = () => `Basic ${Buffer.from(`${MIDTRANS_SERVER_KEY}:`).toString('base64')}`;
 
 function send(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -188,6 +199,192 @@ async function handleConcierge(req, res) {
   send(res, 200, { text, recommendedIds, provider: 'live' });
 }
 
+// ── Midtrans sandbox payment proxy ──────────────────────────────────────────
+
+function validOrderRef(value) {
+  const ref = String(value || '');
+  return /^[A-Za-z0-9-]{6,64}$/.test(ref) ? ref : null;
+}
+
+function pricedItems(input) {
+  if (!Array.isArray(input) || !input.length || input.length > 20) {
+    throw new Error('Choose between 1 and 20 menu items.');
+  }
+  const menu = new Map(MENU_DATA.map((dish) => [dish.id, dish]));
+  return input.map((entry) => {
+    const dish = menu.get(entry?.id);
+    const qty = Number(entry?.qty);
+    if (!dish || !Number.isInteger(qty) || qty < 1 || qty > 20) {
+      throw new Error('One or more cart items are invalid. Please refresh the menu.');
+    }
+    return {
+      id: dish.id,
+      name: dish.name,
+      qty,
+      price: convertFromEur(dish.price, 'IDR')
+    };
+  });
+}
+
+async function updateSupabaseOrder(orderRef, status, extra = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return false;
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          Prefer: 'return=minimal'
+        },
+        body: JSON.stringify({
+          status,
+          midtrans_order_id: extra.transactionId || null,
+          updated_at: new Date().toISOString()
+        })
+      }
+    );
+    return response.ok;
+  } catch (error) {
+    console.error('[midtrans] could not sync order status to Supabase', error.message);
+    return false;
+  }
+}
+
+function handlePaymentConfig(_req, res) {
+  send(res, 200, {
+    enabled: paymentEnabled,
+    clientKey: MIDTRANS_CLIENT_KEY,
+    mode: 'sandbox',
+    hasServerKey: Boolean(MIDTRANS_SERVER_KEY)
+  });
+}
+
+async function handlePaymentToken(req, res) {
+  const body = await readBody(req);
+  const orderRef = validOrderRef(body?.orderRef);
+  if (!orderRef) {
+    send(res, 400, { error: 'A valid order reference is required.' });
+    return;
+  }
+
+  const items = pricedItems(body?.items);
+  const grossAmount = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  if (body?.amountIdr != null && Number(body.amountIdr) !== grossAmount) {
+    send(res, 400, { error: 'The order amount did not match the menu. Please try again.' });
+    return;
+  }
+
+  const customer = {
+    name: String(body?.customer?.name || '').trim().slice(0, 100),
+    email: String(body?.customer?.email || '').trim().slice(0, 160),
+    phone: String(body?.customer?.phone || '').trim().slice(0, 30)
+  };
+  if (!customer.name || !customer.email || !customer.phone) {
+    send(res, 400, { error: 'Name, email and phone number are required.' });
+    return;
+  }
+
+  if (!MIDTRANS_SERVER_KEY) {
+    // Sandbox demo without credentials: the browser marks the order demo-paid.
+    send(res, 200, {
+      demo: true,
+      orderId: `DEMO-${orderRef}`,
+      grossAmount,
+      clientKey: MIDTRANS_CLIENT_KEY
+    });
+    return;
+  }
+
+  const upstream = await fetch(`${MIDTRANS_API}/v2/charge`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: midtransAuth()
+    },
+    body: JSON.stringify({
+      payment_type: 'credit_card',
+      transaction_details: { order_id: orderRef, gross_amount: grossAmount },
+      credit_card: { secure: true },
+      customer_details: { first_name: customer.name, email: customer.email, phone: customer.phone },
+      item_details: items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.qty }))
+    })
+  });
+  const data = await upstream.json().catch(() => ({}));
+  if (!upstream.ok || !data?.token) {
+    const detail = data?.error_messages?.[0] || data?.error?.message || `Midtrans returned ${upstream.status}`;
+    console.error('[midtrans] charge failed', upstream.status, detail);
+    send(res, 502, { error: `Midtrans sandbox could not create a payment: ${detail}` });
+    return;
+  }
+
+  send(res, 200, {
+    snapToken: data.token,
+    redirectUrl: data.redirect_url,
+    orderId: orderRef,
+    grossAmount,
+    clientKey: MIDTRANS_CLIENT_KEY
+  });
+}
+
+async function handlePaymentConfirm(req, res) {
+  const body = await readBody(req);
+  const orderRef = validOrderRef(body?.orderRef);
+  if (!orderRef) {
+    send(res, 400, { error: 'A valid order reference is required.' });
+    return;
+  }
+  if (!MIDTRANS_SERVER_KEY) {
+    send(res, 200, { demo: true, status: 'demo-paid', verified: false, orderId: `DEMO-${orderRef}` });
+    return;
+  }
+
+  const upstream = await fetch(`${MIDTRANS_API}/v2/${encodeURIComponent(orderRef)}/status`, {
+    headers: { Accept: 'application/json', Authorization: midtransAuth() }
+  });
+  const data = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) {
+    send(res, 502, { error: `Midtrans status check failed (${upstream.status}).` });
+    return;
+  }
+
+  const status = data.transaction_status || 'pending';
+  const verified = ['settlement', 'capture'].includes(status);
+  if (verified) await updateSupabaseOrder(orderRef, 'paid', { transactionId: data.transaction_id });
+  send(res, 200, {
+    orderId: orderRef,
+    status,
+    verified,
+    transactionId: data.transaction_id || null,
+    grossAmount: Number(data.gross_amount) || 0,
+    fraudStatus: data.fraud_status || null
+  });
+}
+
+async function handlePaymentNotification(req, res) {
+  if (!MIDTRANS_SERVER_KEY) {
+    send(res, 503, { error: 'Midtrans server key is not configured.' });
+    return;
+  }
+  const body = await readBody(req);
+  const signature = crypto.createHash('sha512')
+    .update(`${body?.order_id || ''}${body?.status_code || ''}${body?.gross_amount || ''}${MIDTRANS_SERVER_KEY}`)
+    .digest('hex');
+  if (signature !== String(body?.signature_key || '').toLowerCase()) {
+    send(res, 403, { error: 'Invalid Midtrans signature.' });
+    return;
+  }
+
+  const transaction = body.transaction_status;
+  const status = ['settlement', 'capture'].includes(transaction) ? 'paid'
+    : ['deny', 'cancel', 'expire'].includes(transaction) ? 'failed' : 'pending';
+  await updateSupabaseOrder(body.order_id, status, { transactionId: body.transaction_id });
+  send(res, 200, { ok: true, status });
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -200,7 +397,37 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url === '/') {
-    send(res, 200, { ok: true, model: MODEL, hasKey: Boolean(API_KEY) });
+    send(res, 200, {
+      ok: true,
+      model: MODEL,
+      hasKey: Boolean(API_KEY),
+      midtrans: paymentEnabled ? 'sandbox' : 'demo'
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && (req.url === '/midtrans/config' || req.url === '/midtrans/config/')) {
+    handlePaymentConfig(req, res);
+    return;
+  }
+
+  const paymentRoute = req.method === 'POST'
+    ? {
+        '/midtrans/token': handlePaymentToken,
+        '/midtrans/token/': handlePaymentToken,
+        '/midtrans/confirm': handlePaymentConfirm,
+        '/midtrans/confirm/': handlePaymentConfirm,
+        '/midtrans/notification': handlePaymentNotification,
+        '/midtrans/notification/': handlePaymentNotification
+      }[req.url]
+    : null;
+  if (paymentRoute) {
+    try {
+      await paymentRoute(req, res);
+    } catch (error) {
+      console.error('[midtrans]', error);
+      if (!res.headersSent) send(res, 500, { error: error.message || 'Unexpected payment error.' });
+    }
     return;
   }
 
@@ -214,10 +441,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  send(res, 404, { error: 'Not found. POST to /concierge.' });
+  send(res, 404, { error: 'Not found. Try POST /concierge or POST /midtrans/token.' });
 });
 
 server.listen(PORT, () => {
-  console.log(`ÉTOILE concierge proxy listening on http://localhost:${PORT}`);
+  console.log(`ÉTOILE concierge + payment proxy listening on http://localhost:${PORT}`);
   console.log(API_KEY ? `DeepSeek key loaded · model: ${MODEL}` : 'Warning: DEEPSEEK_API_KEY is missing (local menu guide will be used).');
+  console.log(paymentEnabled
+    ? 'Midtrans sandbox enabled (Snap checkout).'
+    : 'Midtrans keys missing — checkout will run the clearly labelled sandbox demo.');
 });

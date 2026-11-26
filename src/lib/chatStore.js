@@ -7,13 +7,10 @@ export async function ensureChatSession(lang = 'EN', currency = 'IDR') {
   if (!isSupabaseConfigured || !supabase) return null;
   if (cachedSessionId) return cachedSessionId;
 
-  // anonymous sign-in (idempotent: SDK restores existing session)
-  let { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error) throw error;
-    session = data.session;
-  }
+  // Chat history is a member feature. Guests keep chatting locally without a
+  // database session (anonymous sign-ins are disabled on many projects).
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session || session.user.is_anonymous) return null;
   cachedUserId = session.user.id;
 
   // latest session for this user
