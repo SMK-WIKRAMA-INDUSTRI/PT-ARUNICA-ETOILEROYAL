@@ -1,22 +1,6 @@
 import { useRef, useState } from 'react';
 import { useI18n } from './i18n.jsx';
-
-const IMAGES = [
-  'photo-1546833999-b9f581a1996d',
-  'photo-1544025162-d76694265947',
-  'photo-1600891964599-f61ba0e24092',
-  'photo-1558030006-450675393462',
-  'photo-1547592180-85f173990554',
-  'photo-1551024506-0bccd828d307'
-];
-
-const imageFor = (dish, index) => {
-  const imageIndex = dish.dishType === 'tomahawk' ? 3
-    : dish.dishType === 'filet' ? 2
-      : dish.dishType === 'fondant' || dish.dishType === 'pistachio' ? 5
-        : index % IMAGES.length;
-  return `https://images.unsplash.com/${IMAGES[imageIndex]}?auto=format&fit=crop&w=1100&q=85`;
-};
+import { imageFor } from './foodImages.js';
 
 export default function MenuFlipbook({ items, page, onPage, onDetails, onReserve, onClearFilters, fmt }) {
   const { t } = useI18n();

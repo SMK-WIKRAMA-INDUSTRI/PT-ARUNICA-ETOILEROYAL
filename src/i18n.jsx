@@ -144,7 +144,22 @@ const STRINGS = {
     reserveTitle: 'Reserve your table',
     reserveBody: 'Every reservation is confirmed personally. For the Salon Privé Royal (8–16 guests), our sommelier composes a bespoke menu.',
     reserveNow: 'Reserve now →', dressCodeNote: 'Dress code: Smart Elegant',
-    footerRights: '© 2025 Étoile Royale. All rights reserved.'
+    footerRights: '© 2025 Étoile Royale. All rights reserved.',
+
+    // Extra UI strings (Foodly, Lumiere, Bari, Huff & Puff inspired)
+    viewMode: 'View mode',
+    gridView: 'Modern Cards',
+    carteView: 'Carte Book',
+    galleryTitle: 'A Glimpse of the Salon',
+    gallerySub: 'Intimate candlelight, live binchotan embers, and world-class craft.',
+    specialsTitle: "Chef's Cut of the Evening",
+    specialsSub: 'A masterwork of 45-day Himalayan salt dry-aging and binchotan fire.',
+    testimonialsTitle: 'What Our Guests Say',
+    testimonialsSub: 'Acclaimed by international culinary critics and discerning patrons.',
+    happyGuests: 'Discerning Guests',
+    michelinCalibre: 'Michelin Distinction',
+    chefTitle: 'Executive Chef',
+    chefQuote: 'Fire, patience, and the world’s most pristine cuts of beef.'
   },
 
   ID: {
@@ -278,7 +293,22 @@ const STRINGS = {
     reserveTitle: 'Pesan meja Anda',
     reserveBody: 'Setiap reservasi dikonfirmasi langsung. Untuk Salon Privé Royal (8–16 tamu), sommelier kami menyusun menu khusus.',
     reserveNow: 'Pesan sekarang →', dressCodeNote: 'Aturan berpakaian: Smart Elegant',
-    footerRights: '© 2025 Étoile Royale. Seluruh hak dilindungi.'
+    footerRights: '© 2025 Étoile Royale. Seluruh hak dilindungi.',
+
+    // Extra UI strings (Foodly, Lumiere, Bari, Huff & Puff inspired)
+    viewMode: 'Mode tampilan',
+    gridView: 'Kartu Modern',
+    carteView: 'Buku Carte',
+    galleryTitle: 'Sekilas Suasana Salon',
+    gallerySub: 'Cahaya lilin intim, bara api binchotan langsung, dan keahlian kelas dunia.',
+    specialsTitle: 'Pilihan Koki Malam Ini',
+    specialsSub: 'Karya agung maturasi garam Himalaya 45 hari dan api binchotan.',
+    testimonialsTitle: 'Apa Kata Tamu Kami',
+    testimonialsSub: 'Diakui oleh kritikus kuliner internasional dan pelanggan terhormat.',
+    happyGuests: 'Tamu Terhormat',
+    michelinCalibre: 'Kaliber Michelin',
+    chefTitle: 'Kepala Koki Eksekutif',
+    chefQuote: 'Api, kesabaran, dan potongan daging sapi paling murni di dunia.'
   }
 };
 
